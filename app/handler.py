@@ -5,8 +5,8 @@ from omegaconf import OmegaConf
 from app.demo import *
 
 
-def prepare_cfg(is_static:bool, video_path:str, demo_id:str):
-    output_root = Path(video_path).parent / 'output'
+def prepare_cfg(is_static: bool, video_path: str, demo_id: str):
+    output_root = Path(video_path).parent / "output"
     output_root = str(output_root.absolute())
 
     # Cfg
@@ -41,14 +41,14 @@ def prepare_cfg(is_static:bool, video_path:str, demo_id:str):
 
 
 def run_demo(cfg, progress):
-    ''' Allow user to adjust GPU quota. '''
+    """Allow user to adjust GPU quota."""
 
     smpl_utils = {
-            'smplx'       : make_smplx("supermotion"),
-            'J_regressor' : torch.load("hmr4d/utils/body_model/smpl_neutral_J_regressor.pt"),
-            'smplx2smpl'  : torch.load("hmr4d/utils/body_model/smplx2smpl_sparse.pt"),
-            'faces_smpl'  : make_smplx("smpl").faces,
-        }
+        "smplx": make_smplx("supermotion"),
+        "J_regressor": torch.load("hmr4d/utils/body_model/smpl_neutral_J_regressor.pt"),
+        "smplx2smpl": torch.load("hmr4d/utils/body_model/smplx2smpl_sparse.pt"),
+        "faces_smpl": make_smplx("smpl").faces,
+    }
 
     def run_GPU_task():
         Log.info(f"[GPU]: {torch.cuda.get_device_name()}")
@@ -60,23 +60,23 @@ def run_demo(cfg, progress):
 
         # ===== HMR4D ===== #
         Log.info("[HMR4D] Predicting")
-        progress(0, '[GVHMR] Initializing pipeline...')
+        progress(0, "[GVHMR] Initializing pipeline...")
         model: DemoPL = hydra.utils.instantiate(cfg.model, _recursive_=False)
         model.load_pretrained_model(cfg.ckpt_path)
         model = model.eval().cuda()
         tic = Log.sync_time()
-        progress(1/3, '[GVHMR] Predicting...')
+        progress(1 / 3, "[GVHMR] Predicting...")
         pred = model.predict(data, static_cam=cfg.static_cam)
         pred = detach_to_cpu(pred)
         data_time = data["length"] / 30
         Log.info(f"[HMR4D] Elapsed: {Log.sync_time() - tic:.2f}s for data-length={data_time:.1f}s")
 
-        progress(2/3, '[GVHMR] Rendering...')
+        progress(2 / 3, "[GVHMR] Rendering...")
 
         # ===== Render ===== #
-        smpl_utils['smplx'] = smpl_utils['smplx'].cuda()
-        smpl_utils['J_regressor'] = smpl_utils['J_regressor'].cuda()
-        smpl_utils['smplx2smpl'] = smpl_utils['smplx2smpl'].cuda()
+        smpl_utils["smplx"] = smpl_utils["smplx"].cuda()
+        smpl_utils["J_regressor"] = smpl_utils["J_regressor"].cuda()
+        smpl_utils["smplx2smpl"] = smpl_utils["smplx2smpl"].cuda()
         render_incam(cfg, pred, smpl_utils)
         render_global(cfg, pred, smpl_utils)
         return
@@ -87,23 +87,25 @@ def run_demo(cfg, progress):
 
 def handler(video_path, cam_status, progress=gr.Progress()):
     # 0. Check validity of inputs.
-    if cam_status not in ['Static Camera', 'Dynamic Camera']:
-        raise gr.Error('Please define the camera status!', duration=5)
+    if cam_status not in ["Static Camera", "Dynamic Camera"]:
+        raise gr.Error("Please define the camera status!", duration=5)
     if video_path is None or not Path(video_path).exists():
-        raise gr.Error('Can not find the video!', duration=5)
+        raise gr.Error("Can not find the video!", duration=5)
 
     # 1. Deal with APP inputs.
-    is_static = cam_status == 'Static Camera'
+    is_static = cam_status == "Static Camera"
     Log.info(f"[Input Args] is_static: {is_static}")
     Log.info(f"[Input Args] video_path: {video_path}")
 
     if not is_static:
         Log.info("[Warning] Dynamic Camera is not supported yet.")
-        raise gr.Error('DPVO is not supported in spaces yet. Try to run videos with static camera instead!', duration=20)
+        raise gr.Error(
+            "DPVO is not supported in spaces yet. Try to run videos with static camera instead!", duration=20
+        )
 
     # 2. Prepare cfg.
     Log.info(f"[Video]: {video_path}")
-    demo_id = f'{Path(video_path).stem}_{np.random.randint(0, 1024):04d}'
+    demo_id = f"{Path(video_path).stem}_{np.random.randint(0, 1024):04d}"
     cfg = prepare_cfg(is_static, video_path, demo_id)
 
     # 3. Run demo.

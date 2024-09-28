@@ -31,6 +31,9 @@ from hmr4d.utils.vis.renderer import Renderer, get_global_cameras_static, get_gr
 from tqdm import tqdm
 from hmr4d.utils.geo_transform import apply_T_on_points, compute_T_ayfz2ay
 from einops import einsum, rearrange
+from scipy.spatial.transform import Rotation as R
+import numpy as np
+from math import radians
 
 
 CRF = 23  # 17 is lossless, every +6 halves the mp4 size
@@ -176,19 +179,75 @@ def load_data_dict(cfg):
     return data
 
 
+def axis_angle_to_euler(axis_angle):
+    # Convert a single axis-angle (3,) to Euler angles (3,)
+    r = R.from_rotvec(axis_angle)
+    euler = r.as_euler("xyz", degrees=True)  # BVH typically uses 'xyz' Euler angles
+    return euler
+
+
+# Function to convert full pose parameters into Euler angles for BVH
+def convert_smplx_to_bvh_frame(global_orient, body_pose, left_hand_pose, right_hand_pose, jaw_pose):
+    frame = []
+
+    # Convert global pelvis root rotation (axis-angle to euler XYZ)
+    root_euler = axis_angle_to_euler(global_orient)
+    frame.extend(root_euler.tolist())
+
+    # Flat out all the body rotation matrices from poses to single axis-angle frames
+    body_joints = body_pose.reshape(-1, 3)
+    for i in range(body_joints.shape[0]):
+        body_euler = axis_angle_to_euler(body_joints[i])
+        frame.extend(body_euler.tolist())
+
+    # Do the same for left hand, right hand, and face
+    left_joints = left_hand_pose.reshape(-1, 3)
+    right_joints = right_hand_pose.reshape(-1, 3)
+    hand_face_joints = torch.cat([left_joints, right_joints, jaw_pose.unsqueeze(0)], dim=0)
+
+    for i in range(hand_face_joints.shape[0]):
+        joint_euler = axis_angle_to_euler(hand_face_joints[i])
+        frame.extend(joint_euler.tolist())
+
+    return frame
+
+
 def render_incam(cfg):
     incam_video_path = Path(cfg.paths.incam_video)
     if incam_video_path.exists():
         Log.info(f"[Render Incam] Video already exists at {incam_video_path}")
-        return
+        # return
 
     pred = torch.load(cfg.paths.hmr4d_results)
     smplx = make_smplx("supermotion").cuda()
     smplx2smpl = torch.load("hmr4d/utils/body_model/smplx2smpl_sparse.pt").cuda()
     faces_smpl = make_smplx("smpl").faces
 
+    for key in pred["smpl_params_incam"]:
+        print(key, pred["smpl_params_incam"][key].shape)
+
     # smpl
     smplx_out = smplx(**to_cuda(pred["smpl_params_incam"]))
+    for key in smplx_out:
+        print(key, end=" ")
+        if smplx_out[key] is not None:
+            print(smplx_out[key].shape)
+        else:
+            print(None)
+
+    # Iterate over all frames (172)
+    bvh_frames = []
+    for t in range(smplx_out["smplx_out"].shape[0]):
+        frame_data = convert_smplx_to_bvh_frame(
+            smplx_out["global_orient"][t].cpu().numpy(),
+            smplx_out["body_pose"][t].cpu().numpy(),
+            smplx_out["left_hand_pose"][t].cpu().numpy(),
+            smplx_out["right_hand_pose"][t].cpu().numpy(),
+            smplx_out["jaw_pose"][t].cpu().numpy(),
+        )
+        bvh_frames.append(frame_data)
+    output_data = {"bvh_frames": bvh_frames}
+
     pred_c_verts = torch.stack([torch.matmul(smplx2smpl, v_) for v_ in smplx_out.vertices])
 
     # -- rendering code -- #

@@ -8,14 +8,15 @@ from app.handler import handler
 def entry():
     try:
         demo = gr.Interface(
-                fn          = handler,
-                inputs      = get_inputs_components(),
-                outputs     = get_outputs_components(),
-            )
+            fn=handler,
+            inputs=get_inputs_components(),
+            outputs=get_outputs_components(),
+        )
 
         demo.launch()
     except Exception as e:
-        print(f'Error: {str(e)}')
+        print(f"Error: {str(e)}")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     entry()

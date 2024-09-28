@@ -33,60 +33,70 @@ class MobileNetV3(BaseBackbone):
             some memory while slowing down the training speed.
             Default: False.
     """
+
     # Parameters to build each block:
     #     [kernel size, mid channels, out channels, with_se, act type, stride]
     arch_settings = {
-        'small': [[3, 16, 16, True, 'ReLU', 2],
-                  [3, 72, 24, False, 'ReLU', 2],
-                  [3, 88, 24, False, 'ReLU', 1],
-                  [5, 96, 40, True, 'HSwish', 2],
-                  [5, 240, 40, True, 'HSwish', 1],
-                  [5, 240, 40, True, 'HSwish', 1],
-                  [5, 120, 48, True, 'HSwish', 1],
-                  [5, 144, 48, True, 'HSwish', 1],
-                  [5, 288, 96, True, 'HSwish', 2],
-                  [5, 576, 96, True, 'HSwish', 1],
-                  [5, 576, 96, True, 'HSwish', 1]],
-        'big': [[3, 16, 16, False, 'ReLU', 1],
-                [3, 64, 24, False, 'ReLU', 2],
-                [3, 72, 24, False, 'ReLU', 1],
-                [5, 72, 40, True, 'ReLU', 2],
-                [5, 120, 40, True, 'ReLU', 1],
-                [5, 120, 40, True, 'ReLU', 1],
-                [3, 240, 80, False, 'HSwish', 2],
-                [3, 200, 80, False, 'HSwish', 1],
-                [3, 184, 80, False, 'HSwish', 1],
-                [3, 184, 80, False, 'HSwish', 1],
-                [3, 480, 112, True, 'HSwish', 1],
-                [3, 672, 112, True, 'HSwish', 1],
-                [5, 672, 160, True, 'HSwish', 1],
-                [5, 672, 160, True, 'HSwish', 2],
-                [5, 960, 160, True, 'HSwish', 1]]
+        "small": [
+            [3, 16, 16, True, "ReLU", 2],
+            [3, 72, 24, False, "ReLU", 2],
+            [3, 88, 24, False, "ReLU", 1],
+            [5, 96, 40, True, "HSwish", 2],
+            [5, 240, 40, True, "HSwish", 1],
+            [5, 240, 40, True, "HSwish", 1],
+            [5, 120, 48, True, "HSwish", 1],
+            [5, 144, 48, True, "HSwish", 1],
+            [5, 288, 96, True, "HSwish", 2],
+            [5, 576, 96, True, "HSwish", 1],
+            [5, 576, 96, True, "HSwish", 1],
+        ],
+        "big": [
+            [3, 16, 16, False, "ReLU", 1],
+            [3, 64, 24, False, "ReLU", 2],
+            [3, 72, 24, False, "ReLU", 1],
+            [5, 72, 40, True, "ReLU", 2],
+            [5, 120, 40, True, "ReLU", 1],
+            [5, 120, 40, True, "ReLU", 1],
+            [3, 240, 80, False, "HSwish", 2],
+            [3, 200, 80, False, "HSwish", 1],
+            [3, 184, 80, False, "HSwish", 1],
+            [3, 184, 80, False, "HSwish", 1],
+            [3, 480, 112, True, "HSwish", 1],
+            [3, 672, 112, True, "HSwish", 1],
+            [5, 672, 160, True, "HSwish", 1],
+            [5, 672, 160, True, "HSwish", 2],
+            [5, 960, 160, True, "HSwish", 1],
+        ],
     }  # yapf: disable
 
-    def __init__(self,
-                 arch='small',
-                 conv_cfg=None,
-                 norm_cfg=dict(type='BN'),
-                 out_indices=(-1, ),
-                 frozen_stages=-1,
-                 norm_eval=False,
-                 with_cp=False):
+    def __init__(
+        self,
+        arch="small",
+        conv_cfg=None,
+        norm_cfg=dict(type="BN"),
+        out_indices=(-1,),
+        frozen_stages=-1,
+        norm_eval=False,
+        with_cp=False,
+    ):
         # Protect mutable default arguments
         norm_cfg = copy.deepcopy(norm_cfg)
         super().__init__()
         assert arch in self.arch_settings
         for index in out_indices:
-            if index not in range(-len(self.arch_settings[arch]),
-                                  len(self.arch_settings[arch])):
-                raise ValueError('the item in out_indices must in '
-                                 f'range(0, {len(self.arch_settings[arch])}). '
-                                 f'But received {index}')
+            if index not in range(-len(self.arch_settings[arch]), len(self.arch_settings[arch])):
+                raise ValueError(
+                    "the item in out_indices must in "
+                    f"range(0, {len(self.arch_settings[arch])}). "
+                    f"But received {index}"
+                )
 
         if frozen_stages not in range(-1, len(self.arch_settings[arch])):
-            raise ValueError('frozen_stages must be in range(-1, '
-                             f'{len(self.arch_settings[arch])}). '
-                             f'But received {frozen_stages}')
+            raise ValueError(
+                "frozen_stages must be in range(-1, "
+                f"{len(self.arch_settings[arch])}). "
+                f"But received {frozen_stages}"
+            )
         self.arch = arch
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
@@ -104,7 +114,8 @@ class MobileNetV3(BaseBackbone):
             padding=1,
             conv_cfg=conv_cfg,
             norm_cfg=norm_cfg,
-            act_cfg=dict(type='HSwish'))
+            act_cfg=dict(type="HSwish"),
+        )
 
         self.layers = self._make_layer()
         self.feat_dim = self.arch_settings[arch][-1][2]
@@ -113,13 +124,9 @@ class MobileNetV3(BaseBackbone):
         layers = []
         layer_setting = self.arch_settings[self.arch]
         for i, params in enumerate(layer_setting):
-            (kernel_size, mid_channels, out_channels, with_se, act,
-             stride) = params
+            (kernel_size, mid_channels, out_channels, with_se, act, stride) = params
             if with_se:
-                se_cfg = dict(
-                    channels=mid_channels,
-                    ratio=4,
-                    act_cfg=(dict(type='ReLU'), dict(type='HSigmoid')))
+                se_cfg = dict(channels=mid_channels, ratio=4, act_cfg=(dict(type="ReLU"), dict(type="HSigmoid")))
             else:
                 se_cfg = None
 
@@ -134,9 +141,10 @@ class MobileNetV3(BaseBackbone):
                 conv_cfg=self.conv_cfg,
                 norm_cfg=self.norm_cfg,
                 act_cfg=dict(type=act),
-                with_cp=self.with_cp)
+                with_cp=self.with_cp,
+            )
             self.in_channels = out_channels
-            layer_name = f'layer{i + 1}'
+            layer_name = f"layer{i + 1}"
             self.add_module(layer_name, layer)
             layers.append(layer_name)
         return layers
@@ -152,7 +160,7 @@ class MobileNetV3(BaseBackbone):
                 elif isinstance(m, nn.BatchNorm2d):
                     constant_init(m, 1)
         else:
-            raise TypeError('pretrained must be a str or None')
+            raise TypeError("pretrained must be a str or None")
 
     def forward(self, x):
         x = self.conv1(x)
@@ -161,8 +169,7 @@ class MobileNetV3(BaseBackbone):
         for i, layer_name in enumerate(self.layers):
             layer = getattr(self, layer_name)
             x = layer(x)
-            if i in self.out_indices or \
-                    i - len(self.layers) in self.out_indices:
+            if i in self.out_indices or i - len(self.layers) in self.out_indices:
                 outs.append(x)
 
         if len(outs) == 1:
@@ -174,7 +181,7 @@ class MobileNetV3(BaseBackbone):
             for param in self.conv1.parameters():
                 param.requires_grad = False
         for i in range(1, self.frozen_stages + 1):
-            layer = getattr(self, f'layer{i}')
+            layer = getattr(self, f"layer{i}")
             layer.eval()
             for param in layer.parameters():
                 param.requires_grad = False

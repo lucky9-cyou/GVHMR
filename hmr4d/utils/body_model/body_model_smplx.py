@@ -100,6 +100,8 @@ class BodyModelSMPLX(nn.Module):
         if transl is None:
             transl = torch.zeros([batch_size, 3], dtype=dtype, device=device)
 
+        print("transl is None:", transl is None)
+
         bm_out = self.bm(
             betas=betas,
             global_orient=global_orient,

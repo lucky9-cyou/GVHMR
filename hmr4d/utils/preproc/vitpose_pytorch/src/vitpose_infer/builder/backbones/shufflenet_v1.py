@@ -5,8 +5,7 @@ import logging
 import torch
 import torch.nn as nn
 import torch.utils.checkpoint as cp
-from mmcv.cnn import (ConvModule, build_activation_layer, constant_init,
-                      normal_init)
+from mmcv.cnn import ConvModule, build_activation_layer, constant_init, normal_init
 from torch.nn.modules.batchnorm import _BatchNorm
 
 from ..builder import BACKBONES
@@ -44,16 +43,18 @@ class ShuffleUnit(nn.Module):
         Tensor: The output tensor.
     """
 
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 groups=3,
-                 first_block=True,
-                 combine='add',
-                 conv_cfg=None,
-                 norm_cfg=dict(type='BN'),
-                 act_cfg=dict(type='ReLU'),
-                 with_cp=False):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        groups=3,
+        first_block=True,
+        combine="add",
+        conv_cfg=None,
+        norm_cfg=dict(type="BN"),
+        act_cfg=dict(type="ReLU"),
+        with_cp=False,
+    ):
         # Protect mutable default arguments
         norm_cfg = copy.deepcopy(norm_cfg)
         act_cfg = copy.deepcopy(act_cfg)
@@ -66,20 +67,17 @@ class ShuffleUnit(nn.Module):
         self.bottleneck_channels = self.out_channels // 4
         self.with_cp = with_cp
 
-        if self.combine == 'add':
+        if self.combine == "add":
             self.depthwise_stride = 1
             self._combine_func = self._add
-            assert in_channels == out_channels, (
-                'in_channels must be equal to out_channels when combine '
-                'is add')
-        elif self.combine == 'concat':
+            assert in_channels == out_channels, "in_channels must be equal to out_channels when combine " "is add"
+        elif self.combine == "concat":
             self.depthwise_stride = 2
             self._combine_func = self._concat
             self.out_channels -= self.in_channels
             self.avgpool = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         else:
-            raise ValueError(f'Cannot combine tensors with {self.combine}. '
-                             'Only "add" and "concat" are supported')
+            raise ValueError(f"Cannot combine tensors with {self.combine}. " 'Only "add" and "concat" are supported')
 
         self.first_1x1_groups = 1 if first_block else self.groups
         self.g_conv_1x1_compress = ConvModule(
@@ -89,7 +87,8 @@ class ShuffleUnit(nn.Module):
             groups=self.first_1x1_groups,
             conv_cfg=conv_cfg,
             norm_cfg=norm_cfg,
-            act_cfg=act_cfg)
+            act_cfg=act_cfg,
+        )
 
         self.depthwise_conv3x3_bn = ConvModule(
             in_channels=self.bottleneck_channels,
@@ -100,7 +99,8 @@ class ShuffleUnit(nn.Module):
             groups=self.bottleneck_channels,
             conv_cfg=conv_cfg,
             norm_cfg=norm_cfg,
-            act_cfg=None)
+            act_cfg=None,
+        )
 
         self.g_conv_1x1_expand = ConvModule(
             in_channels=self.bottleneck_channels,
@@ -109,7 +109,8 @@ class ShuffleUnit(nn.Module):
             groups=self.groups,
             conv_cfg=conv_cfg,
             norm_cfg=norm_cfg,
-            act_cfg=None)
+            act_cfg=None,
+        )
 
         self.act = build_activation_layer(act_cfg)
 
@@ -136,7 +137,7 @@ class ShuffleUnit(nn.Module):
 
             out = self.g_conv_1x1_expand(out)
 
-            if self.combine == 'concat':
+            if self.combine == "concat":
                 residual = self.avgpool(residual)
                 out = self.act(out)
                 out = self._combine_func(residual, out)
@@ -179,16 +180,18 @@ class ShuffleNetV1(BaseBackbone):
             memory while slowing down the training speed. Default: False.
     """
 
-    def __init__(self,
-                 groups=3,
-                 widen_factor=1.0,
-                 out_indices=(2, ),
-                 frozen_stages=-1,
-                 conv_cfg=None,
-                 norm_cfg=dict(type='BN'),
-                 act_cfg=dict(type='ReLU'),
-                 norm_eval=False,
-                 with_cp=False):
+    def __init__(
+        self,
+        groups=3,
+        widen_factor=1.0,
+        out_indices=(2,),
+        frozen_stages=-1,
+        conv_cfg=None,
+        norm_cfg=dict(type="BN"),
+        act_cfg=dict(type="ReLU"),
+        norm_eval=False,
+        with_cp=False,
+    ):
         # Protect mutable default arguments
         norm_cfg = copy.deepcopy(norm_cfg)
         act_cfg = copy.deepcopy(act_cfg)
@@ -198,12 +201,10 @@ class ShuffleNetV1(BaseBackbone):
 
         for index in out_indices:
             if index not in range(0, 3):
-                raise ValueError('the item in out_indices must in '
-                                 f'range(0, 3). But received {index}')
+                raise ValueError("the item in out_indices must in " f"range(0, 3). But received {index}")
 
         if frozen_stages not in range(-1, 3):
-            raise ValueError('frozen_stages must be in range(-1, 3). '
-                             f'But received {frozen_stages}')
+            raise ValueError("frozen_stages must be in range(-1, 3). " f"But received {frozen_stages}")
         self.out_indices = out_indices
         self.frozen_stages = frozen_stages
         self.conv_cfg = conv_cfg
@@ -223,8 +224,7 @@ class ShuffleNetV1(BaseBackbone):
         elif groups == 8:
             channels = (384, 768, 1536)
         else:
-            raise ValueError(f'{groups} groups is not supported for 1x1 '
-                             'Grouped Convolutions')
+            raise ValueError(f"{groups} groups is not supported for 1x1 " "Grouped Convolutions")
 
         channels = [make_divisible(ch * widen_factor, 8) for ch in channels]
 
@@ -238,12 +238,13 @@ class ShuffleNetV1(BaseBackbone):
             padding=1,
             conv_cfg=conv_cfg,
             norm_cfg=norm_cfg,
-            act_cfg=act_cfg)
+            act_cfg=act_cfg,
+        )
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.layers = nn.ModuleList()
         for i, num_blocks in enumerate(self.stage_blocks):
-            first_block = (i == 0)
+            first_block = i == 0
             layer = self.make_layer(channels[i], num_blocks, first_block)
             self.layers.append(layer)
 
@@ -264,7 +265,7 @@ class ShuffleNetV1(BaseBackbone):
         elif pretrained is None:
             for name, m in self.named_modules():
                 if isinstance(m, nn.Conv2d):
-                    if 'conv1' in name:
+                    if "conv1" in name:
                         normal_init(m, mean=0, std=0.01)
                     else:
                         normal_init(m, mean=0, std=1.0 / m.weight.shape[1])
@@ -274,8 +275,7 @@ class ShuffleNetV1(BaseBackbone):
                         if m.running_mean is not None:
                             nn.init.constant_(m.running_mean, 0)
         else:
-            raise TypeError('pretrained must be a str or None. But received '
-                            f'{type(pretrained)}')
+            raise TypeError("pretrained must be a str or None. But received " f"{type(pretrained)}")
 
     def make_layer(self, out_channels, num_blocks, first_block=False):
         """Stack ShuffleUnit blocks to make a layer.
@@ -290,7 +290,7 @@ class ShuffleNetV1(BaseBackbone):
         layers = []
         for i in range(num_blocks):
             first_block = first_block if i == 0 else False
-            combine_mode = 'concat' if i == 0 else 'add'
+            combine_mode = "concat" if i == 0 else "add"
             layers.append(
                 ShuffleUnit(
                     self.in_channels,
@@ -301,7 +301,9 @@ class ShuffleNetV1(BaseBackbone):
                     conv_cfg=self.conv_cfg,
                     norm_cfg=self.norm_cfg,
                     act_cfg=self.act_cfg,
-                    with_cp=self.with_cp))
+                    with_cp=self.with_cp,
+                )
+            )
             self.in_channels = out_channels
 
         return nn.Sequential(*layers)

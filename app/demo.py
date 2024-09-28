@@ -93,7 +93,7 @@ def run_preprocess(cfg, progress):
     verbose = cfg.verbose
 
     # Get bbx tracking result
-    progress(0, '[Preprocess] YoloV8 Tracking')
+    progress(0, "[Preprocess] YoloV8 Tracking")
     if not Path(paths.bbx).exists():
         tracker = Tracker()
         bbx_xyxy = tracker.get_one_track(video_path).float()  # (L, 4)
@@ -110,7 +110,7 @@ def run_preprocess(cfg, progress):
         save_video(video_overlay, cfg.paths.bbx_xyxy_video_overlay)
 
     # Get VitPose
-    progress(1/4, '[Preprocess] ViTPose')
+    progress(1 / 4, "[Preprocess] ViTPose")
     if not Path(paths.vitpose).exists():
         vitpose_extractor = VitPoseExtractor()
         vitpose = vitpose_extractor.extract(video_path, bbx_xys)
@@ -125,7 +125,7 @@ def run_preprocess(cfg, progress):
         save_video(video_overlay, paths.vitpose_video_overlay)
 
     # Get vit features
-    progress(2/4, '[Preprocess] HMR2 Feature')
+    progress(2 / 4, "[Preprocess] HMR2 Feature")
     if not Path(paths.vit_features).exists():
         extractor = Extractor()
         vit_features = extractor.extract_video_features(video_path, bbx_xys)
@@ -135,7 +135,7 @@ def run_preprocess(cfg, progress):
         Log.info(f"[Preprocess] vit_features from {paths.vit_features}")
 
     # Get DPVO results
-    progress(3/4, '[Preprocess] DPVO')
+    progress(3 / 4, "[Preprocess] DPVO")
     if not static_cam:  # use slam to get cam rotation
         if not Path(paths.slam).exists():
             length, width, height = get_video_lwh(cfg.video_path)
@@ -187,9 +187,9 @@ def render_incam(cfg, pred, smpl_utils):
         return
 
     # pred = torch.load(cfg.paths.hmr4d_results)
-    smplx = smpl_utils['smplx']
-    smplx2smpl = smpl_utils['smplx2smpl']
-    faces_smpl = smpl_utils['faces_smpl']
+    smplx = smpl_utils["smplx"]
+    smplx2smpl = smpl_utils["smplx2smpl"]
+    faces_smpl = smpl_utils["faces_smpl"]
 
     # smpl
     smplx_out = smplx(**to_cuda(pred["smpl_params_incam"]))
@@ -224,10 +224,10 @@ def render_global(cfg, pred, smpl_utils):
 
     debug_cam = False
     # pred = torch.load(cfg.paths.hmr4d_results)
-    smplx = smpl_utils['smplx']
-    smplx2smpl = smpl_utils['smplx2smpl']
-    faces_smpl = smpl_utils['faces_smpl']
-    J_regressor = smpl_utils['J_regressor']
+    smplx = smpl_utils["smplx"]
+    smplx2smpl = smpl_utils["smplx2smpl"]
+    faces_smpl = smpl_utils["faces_smpl"]
+    J_regressor = smpl_utils["J_regressor"]
 
     # smpl
     smplx_out = smplx(**to_cuda(pred["smpl_params_global"]))
