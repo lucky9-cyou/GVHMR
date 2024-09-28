@@ -28,7 +28,11 @@ def get_outputs_components():
             show_label=True,
         ),
         gr.JSON(
-            label="BVH RESULT",
+            label="BVH INCAM RESULT",
+            show_label=True,
+        ),
+        gr.JSON(
+            label="BVH GLOBAL RESULT",
             show_label=True,
         ),
     ]

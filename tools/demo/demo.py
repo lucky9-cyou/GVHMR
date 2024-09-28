@@ -31,8 +31,9 @@ from hmr4d.utils.vis.renderer import Renderer, get_global_cameras_static, get_gr
 from tqdm import tqdm
 from hmr4d.utils.geo_transform import apply_T_on_points, compute_T_ayfz2ay
 from einops import einsum, rearrange
-from scipy.spatial.transform import Rotation as R
 import numpy as np
+import smplx
+import quat
 
 
 CRF = 23  # 17 is lossless, every +6 halves the mp4 size
@@ -178,37 +179,124 @@ def load_data_dict(cfg):
     return data
 
 
-def axis_angle_to_euler(axis_angle):
-    # Convert a single axis-angle (3,) to Euler angles (3,)
-    r = R.from_rotvec(axis_angle)
-    euler = r.as_euler("xyz", degrees=True)  # BVH typically uses 'xyz' Euler angles
-    return euler
+def mirror_rot_trans(lrot, trans, names, parents):
+    joints_mirror = np.array(
+        [
+            (
+                names.index("Left" + n[5:])
+                if n.startswith("Right")
+                else (names.index("Right" + n[4:]) if n.startswith("Left") else names.index(n))
+            )
+            for n in names
+        ]
+    )
+
+    mirror_pos = np.array([-1, 1, 1])
+    mirror_rot = np.array([1, 1, -1, -1])
+    grot = quat.fk_rot(lrot, parents)
+    trans_mirror = mirror_pos * trans
+    grot_mirror = mirror_rot * grot[:, joints_mirror]
+
+    return quat.ik_rot(grot_mirror, parents), trans_mirror
 
 
-# Function to convert full pose parameters into Euler angles for BVH
-def convert_smplx_to_bvh_frame(global_orient, body_pose, left_hand_pose, right_hand_pose, jaw_pose):
-    frame = []
+def smpl2bvh(model_path, rots, mirror, model_type="smpl", gender="NEUTRAL", num_betas=10, fps=60) -> None:
+    """Save bvh file created by smpl parameters.
 
-    # Convert global pelvis root rotation (axis-angle to euler XYZ)
-    root_euler = axis_angle_to_euler(global_orient)
-    frame.extend(root_euler.tolist())
+    Args:
+        model_path (str): Path to smpl models.
+        poses (np.array): Path to npz or pkl file.
+        output (str): Where to save bvh.
+        mirror (bool): Whether save mirror motion or not.
+        model_type (str, optional): I prepared "smpl" only. Defaults to "smpl".
+        gender (str, optional): Gender Information. Defaults to "MALE".
+        num_betas (int, optional): How many pca parameters to use in SMPL. Defaults to 10.
+        fps (int, optional): Frame per second. Defaults to 30.
+    """
 
-    # Flat out all the body rotation matrices from poses to single axis-angle frames
-    body_joints = body_pose.reshape(-1, 3)
-    for i in range(body_joints.shape[0]):
-        body_euler = axis_angle_to_euler(body_joints[i])
-        frame.extend(body_euler.tolist())
+    names = [
+        "Pelvis",
+        "Left_hip",
+        "Right_hip",
+        "Spine1",
+        "Left_knee",
+        "Right_knee",
+        "Spine2",
+        "Left_ankle",
+        "Right_ankle",
+        "Spine3",
+        "Left_foot",
+        "Right_foot",
+        "Neck",
+        "Left_collar",
+        "Right_collar",
+        "Head",
+        "Left_shoulder",
+        "Right_shoulder",
+        "Left_elbow",
+        "Right_elbow",
+        "Left_wrist",
+        "Right_wrist",
+        "Left_palm",
+        "Right_palm",
+    ]
 
-    # Do the same for left hand, right hand, and face
-    left_joints = left_hand_pose.reshape(-1, 3)
-    right_joints = right_hand_pose.reshape(-1, 3)
-    hand_face_joints = torch.cat([left_joints, right_joints, jaw_pose.unsqueeze(0)], dim=0)
+    # I prepared smpl models only,
+    # but I will release for smplx models recently.
+    model = smplx.create(model_path=model_path, model_type=model_type, gender=gender, batch_size=1)
 
-    for i in range(hand_face_joints.shape[0]):
-        joint_euler = axis_angle_to_euler(hand_face_joints[i])
-        frame.extend(joint_euler.tolist())
+    parents = model.parents.detach().cpu().numpy()
 
-    return frame
+    # You can define betas like this.(default betas are 0 at all.)
+    rest = model(
+        # betas = torch.randn([1, num_betas], dtype=torch.float32)
+    )
+    rest_pose = rest.joints.detach().cpu().numpy().squeeze()[:24, :]
+
+    root_offset = rest_pose[0]
+    offsets = rest_pose - rest_pose[parents]
+    offsets[0] = root_offset
+    offsets *= 100
+
+    scaling = None
+
+    rots = rots  # (N, 24, 3)
+    trans = np.zeros((rots.shape[0], 3))
+    # trans = np.squeeze(poses["trans"], axis=0)  # (N, 3)
+
+    if scaling is not None:
+        trans /= scaling
+
+    # to quaternion
+    rots = quat.from_axis_angle(rots)
+
+    order = "zyx"
+    pos = offsets[None].repeat(len(rots), axis=0)
+    positions = pos.copy()
+    positions[:, 0] += trans * 100
+    rotations = np.degrees(quat.to_euler(rots, order=order))
+
+    bvh_data = {
+        "rotations": rotations,
+        "positions": positions,
+        "offsets": offsets,
+        "parents": parents,
+        "names": names,
+        "order": order,
+        "frametime": 1 / fps,
+    }
+
+    return bvh_data
+
+
+def _smplx2smpl(global_orient, body_pose, left_hand_pose, right_hand_pose):
+
+    global_joints = global_orient.numpy()
+    body_joints = body_pose.numpy()
+    left_joints = left_hand_pose[:3].numpy()
+    right_joints = right_hand_pose[:3].numpy()
+
+    return np.concatenate((global_joints, body_joints, left_joints, right_joints), axis=0).reshape(-1, 3)
 
 
 def render_incam(cfg):
@@ -235,17 +323,17 @@ def render_incam(cfg):
             print(None)
 
     # Iterate over all frames (172)
-    bvh_frames = []
+    smpl_frames = []
     for t in range(smplx_out["global_orient"].shape[0]):
-        frame_data = convert_smplx_to_bvh_frame(
+        frame_data = _smplx2smpl(
             smplx_out["global_orient"][t].cpu(),
             smplx_out["body_pose"][t].cpu(),
             smplx_out["left_hand_pose"][t].cpu(),
             smplx_out["right_hand_pose"][t].cpu(),
-            smplx_out["jaw_pose"][t].cpu(),
         )
-        bvh_frames.append(frame_data)
-    output_data = {"bvh_frames": bvh_frames}
+        smpl_frames.append(frame_data)
+    smpl_frames = np.stack(smpl_frames, axis=0)
+    bvh_data = smpl2bvh("inputs/checkpoints/body_models/smpl/SMPL_NEUTRAL.pkl", smpl_frames, True)
 
     pred_c_verts = torch.stack([torch.matmul(smplx2smpl, v_) for v_ in smplx_out.vertices])
 
@@ -275,14 +363,14 @@ def render_incam(cfg):
     writer.close()
     reader.close()
 
-    return output_data
+    return bvh_data
 
 
 def render_global(cfg):
     global_video_path = Path(cfg.paths.global_video)
     if global_video_path.exists():
         Log.info(f"[Render Global] Video already exists at {global_video_path}")
-        return
+        # return
 
     debug_cam = False
     pred = torch.load(cfg.paths.hmr4d_results)
@@ -294,6 +382,19 @@ def render_global(cfg):
     # smpl
     smplx_out = smplx(**to_cuda(pred["smpl_params_global"]))
     pred_ay_verts = torch.stack([torch.matmul(smplx2smpl, v_) for v_ in smplx_out.vertices])
+
+    # Iterate over all frames (172)
+    smpl_frames = []
+    for t in range(smplx_out["global_orient"].shape[0]):
+        frame_data = _smplx2smpl(
+            smplx_out["global_orient"][t].cpu(),
+            smplx_out["body_pose"][t].cpu(),
+            smplx_out["left_hand_pose"][t].cpu(),
+            smplx_out["right_hand_pose"][t].cpu(),
+        )
+        smpl_frames.append(frame_data)
+    smpl_frames = np.stack(smpl_frames, axis=0)
+    bvh_data = smpl2bvh("inputs/checkpoints/body_models/smpl/SMPL_NEUTRAL.pkl", smpl_frames, True)
 
     def move_to_start_point_face_z(verts):
         "XZ to origin, Start from the ground, Face-Z"
@@ -337,6 +438,8 @@ def render_global(cfg):
         img = renderer.render_with_ground(verts_glob[[i]], color[None], cameras, global_lights)
         writer.write_frame(img)
     writer.close()
+
+    return bvh_data
 
 
 if __name__ == "__main__":
