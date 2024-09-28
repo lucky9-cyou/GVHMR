@@ -31,7 +31,8 @@ from hmr4d.utils.vis.renderer import Renderer, get_global_cameras_static, get_gr
 from tqdm import tqdm
 from hmr4d.utils.geo_transform import apply_T_on_points, compute_T_ayfz2ay
 from einops import einsum, rearrange
-
+from scipy.spatial.transform import Rotation as R
+import numpy as np
 
 CRF = 23  # 17 is lossless, every +6 halves the mp4 size
 
@@ -180,6 +181,39 @@ def load_data_dict(cfg):
     return data
 
 
+def axis_angle_to_euler(axis_angle):
+    # Convert a single axis-angle (3,) to Euler angles (3,)
+    r = R.from_rotvec(axis_angle)
+    euler = r.as_euler("xyz", degrees=True)  # BVH typically uses 'xyz' Euler angles
+    return euler
+
+
+# Function to convert full pose parameters into Euler angles for BVH
+def convert_smplx_to_bvh_frame(global_orient, body_pose, left_hand_pose, right_hand_pose, jaw_pose):
+    frame = []
+
+    # Convert global pelvis root rotation (axis-angle to euler XYZ)
+    root_euler = axis_angle_to_euler(global_orient)
+    frame.extend(root_euler.tolist())
+
+    # Flat out all the body rotation matrices from poses to single axis-angle frames
+    body_joints = body_pose.reshape(-1, 3)
+    for i in range(body_joints.shape[0]):
+        body_euler = axis_angle_to_euler(body_joints[i])
+        frame.extend(body_euler.tolist())
+
+    # Do the same for left hand, right hand, and face
+    left_joints = left_hand_pose.reshape(-1, 3)
+    right_joints = right_hand_pose.reshape(-1, 3)
+    hand_face_joints = torch.cat([left_joints, right_joints, jaw_pose.unsqueeze(0)], dim=0)
+
+    for i in range(hand_face_joints.shape[0]):
+        joint_euler = axis_angle_to_euler(hand_face_joints[i])
+        frame.extend(joint_euler.tolist())
+
+    return frame
+
+
 def render_incam(cfg, pred, smpl_utils):
     incam_video_path = Path(cfg.paths.incam_video)
     if incam_video_path.exists():
@@ -194,6 +228,18 @@ def render_incam(cfg, pred, smpl_utils):
     # smpl
     smplx_out = smplx(**to_cuda(pred["smpl_params_incam"]))
     pred_c_verts = torch.stack([torch.matmul(smplx2smpl, v_) for v_ in smplx_out.vertices])
+
+    bvh_frames = []
+    for t in range(smplx_out["global_orient"].shape[0]):
+        frame_data = convert_smplx_to_bvh_frame(
+            smplx_out["global_orient"][t].cpu(),
+            smplx_out["body_pose"][t].cpu(),
+            smplx_out["left_hand_pose"][t].cpu(),
+            smplx_out["right_hand_pose"][t].cpu(),
+            smplx_out["jaw_pose"][t].cpu(),
+        )
+        bvh_frames.append(frame_data)
+    output_data = {"bvh_frames": bvh_frames}
 
     # -- rendering code -- #
     video_path = cfg.video_path
@@ -214,6 +260,8 @@ def render_incam(cfg, pred, smpl_utils):
         writer.write_frame(img)
     writer.close()
     reader.close()
+
+    return output_data
 
 
 def render_global(cfg, pred, smpl_utils):

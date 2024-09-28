@@ -33,7 +33,6 @@ from hmr4d.utils.geo_transform import apply_T_on_points, compute_T_ayfz2ay
 from einops import einsum, rearrange
 from scipy.spatial.transform import Rotation as R
 import numpy as np
-from math import radians
 
 
 CRF = 23  # 17 is lossless, every +6 halves the mp4 size
@@ -237,13 +236,13 @@ def render_incam(cfg):
 
     # Iterate over all frames (172)
     bvh_frames = []
-    for t in range(smplx_out["smplx_out"].shape[0]):
+    for t in range(smplx_out["global_orient"].shape[0]):
         frame_data = convert_smplx_to_bvh_frame(
-            smplx_out["global_orient"][t].cpu().numpy(),
-            smplx_out["body_pose"][t].cpu().numpy(),
-            smplx_out["left_hand_pose"][t].cpu().numpy(),
-            smplx_out["right_hand_pose"][t].cpu().numpy(),
-            smplx_out["jaw_pose"][t].cpu().numpy(),
+            smplx_out["global_orient"][t].cpu(),
+            smplx_out["body_pose"][t].cpu(),
+            smplx_out["left_hand_pose"][t].cpu(),
+            smplx_out["right_hand_pose"][t].cpu(),
+            smplx_out["jaw_pose"][t].cpu(),
         )
         bvh_frames.append(frame_data)
     output_data = {"bvh_frames": bvh_frames}
@@ -275,6 +274,8 @@ def render_incam(cfg):
         writer.write_frame(img)
     writer.close()
     reader.close()
+
+    return output_data
 
 
 def render_global(cfg):

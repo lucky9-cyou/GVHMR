@@ -1,7 +1,7 @@
 import os
 import gradio as gr
 
-from app.gui import get_inputs_components, get_outputs_components, get_desc
+from app.gui import get_inputs_components, get_outputs_components
 from app.handler import handler
 
 

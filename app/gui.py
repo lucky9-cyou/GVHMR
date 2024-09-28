@@ -27,4 +27,8 @@ def get_outputs_components():
             label="GLOBAL RESULT",
             show_label=True,
         ),
+        gr.JSON(
+            label="BVH RESULT",
+            show_label=True,
+        ),
     ]
