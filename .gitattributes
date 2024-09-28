@@ -1,0 +1,2 @@
+inputs/checkpoints/body_models/smpl/SMPL_NEUTRAL.pkl filter=lfs diff=lfs merge=lfs -text
+inputs/checkpoints/body_models/smplx/SMPLX_NEUTRAL.npz filter=lfs diff=lfs merge=lfs -text
