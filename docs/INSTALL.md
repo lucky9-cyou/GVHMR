@@ -1,5 +1,14 @@
 # Install
 
+## Docker
+```bash
+git cloen git@github.com:lucky9-cyou/GVHMR.git --recursive
+cd GVHMR
+
+# build docker image
+docker build -t gvhmr .
+```
+
 ## Environment
 
 ```bash
@@ -8,6 +17,8 @@ cd GVHMR
 
 conda create -y -n gvhmr python=3.10
 conda activate gvhmr
+
+conda install pytorch==2.3.0 torchvision==0.18.0 torchaudio==2.3.0 pytorch-cuda=12.1 -c pytorch -c nvidia
 pip install -r requirements.txt
 pip install -e .
 # to install gvhmr in other repo as editable, try adding "python.analysis.extraPaths": ["path/to/your/package"] to settings.json

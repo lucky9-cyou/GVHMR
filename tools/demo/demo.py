@@ -270,7 +270,7 @@ def smpl2bvh(model_path, rots, mirror, model_type="smpl", gender="NEUTRAL", num_
     # to quaternion
     rots = quat.from_axis_angle(rots)
     # nan to zero
-    rots[np.isnan(rots)] = 0
+    # rots[np.isnan(rots)] = 0
 
     order = "zyx"
     pos = offsets[None].repeat(len(rots), axis=0)
