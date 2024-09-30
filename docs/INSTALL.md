@@ -2,12 +2,23 @@
 
 ## Docker
 ```bash
-git cloen git@github.com:lucky9-cyou/GVHMR.git --recursive
+git clone git@github.com:lucky9-cyou/GVHMR.git --recursive
 cd GVHMR
 
 # build docker image
 docker build -t gvhmr .
+
+# run docker container
+docker run -d --gpus all --rm -p 12345:12345 --name gvhmr -v /path/to/your/inputs:/gvhmr/inputs gvhmr:latest
 ```
+
+## Client
+```bash
+# install client dependencies
+pip install gradio_client numpy==1.26.0
+
+# run client
+python client.py 
 
 ## Environment
 
