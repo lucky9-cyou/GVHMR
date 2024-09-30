@@ -18,7 +18,8 @@ docker run -d --gpus all --rm -p 12345:12345 --name gvhmr -v /path/to/your/input
 pip install gradio_client numpy==1.26.0
 
 # run client
-python client.py 
+python client.py --video /path/to/your/video.mp4
+```
 
 ## Environment
 
