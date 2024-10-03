@@ -13,7 +13,7 @@ def entry():
             outputs=get_outputs_components(),
         )
 
-        demo.launch(server_name="0.0.0.0", server_port=12345)
+        demo.launch(server_name="0.0.0.0", server_port=12346, share=True)
     except Exception as e:
         print(f"Error: {str(e)}")
 

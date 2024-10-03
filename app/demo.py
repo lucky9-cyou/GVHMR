@@ -34,6 +34,7 @@ from einops import einsum, rearrange
 import numpy as np
 from app import quat
 import smplx
+import json
 
 CRF = 23  # 17 is lossless, every +6 halves the mp4 size
 
@@ -282,10 +283,10 @@ def smpl2bvh(model_path, rots, mirror, model_type="smpl", gender="NEUTRAL", num_
     rotations = np.degrees(quat.to_euler(rots, order=order))
 
     bvh_data = {
-        "rotations": rotations,
-        "positions": positions,
-        "offsets": offsets,
-        "parents": parents,
+        "rotations": rotations.tolist(),
+        "positions": positions.tolist(),
+        "offsets": offsets.tolist(),
+        "parents": parents.tolist(),
         "names": names,
         "order": order,
         "frametime": 1 / fps,
@@ -351,8 +352,11 @@ def render_incam(cfg, pred, smpl_utils):
         writer.write_frame(img)
     writer.close()
     reader.close()
+    
+    with open(cfg.paths.incam_video.replace('.mp4', '.json'), "w") as f:
+        json.dump(bvh_data, f)
 
-    return bvh_data
+    return cfg.paths.incam_video.replace('.mp4', '.json')
 
 
 def render_global(cfg, pred, smpl_utils):
@@ -427,8 +431,11 @@ def render_global(cfg, pred, smpl_utils):
         img = renderer.render_with_ground(verts_glob[[i]], color[None], cameras, global_lights)
         writer.write_frame(img)
     writer.close()
+    
+    with open(cfg.paths.global_video.replace('.mp4', '.json'), "w") as f:
+        json.dump(bvh_data, f)
 
-    return bvh_data
+    return cfg.paths.global_video.replace('.mp4', '.json')
 
 
 if __name__ == "__main__":

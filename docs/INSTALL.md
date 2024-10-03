@@ -15,7 +15,7 @@ docker run -d --gpus all --rm -p 12345:12345 --name gvhmr -v /path/to/your/input
 ## Client
 ```bash
 # install client dependencies
-pip install gradio_client numpy==1.26.0
+pip install gradio_client numpy==1.26.0 wget
 
 # run client
 python client.py --video /path/to/your/video.mp4
