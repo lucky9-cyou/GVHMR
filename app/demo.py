@@ -432,10 +432,19 @@ def render_global(cfg, pred, smpl_utils):
         writer.write_frame(img)
     writer.close()
     
+    ground = {
+        scale: scale,
+        cx: cx,
+        cz: cz,
+    }
+    
     with open(cfg.paths.global_video.replace('.mp4', '.json'), "w") as f:
         json.dump(bvh_data, f)
+    
+    with open(cfg.paths.global_video.replace('.mp4', '_ground.json'), "w") as f:
+        json.dump(ground, f)
 
-    return cfg.paths.global_video.replace('.mp4', '.json')
+    return cfg.paths.global_video.replace('.mp4', '.json'), cfg.paths.global_video.replace('.mp4', '_ground.json')
 
 
 if __name__ == "__main__":

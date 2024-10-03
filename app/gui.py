@@ -35,4 +35,8 @@ def get_outputs_components():
             label="BVH GLOBAL RESULT",
             show_label=True,
         ),
+        gr.File(
+            label="Ground Parameters",
+            show_label=True,
+        ),
     ]

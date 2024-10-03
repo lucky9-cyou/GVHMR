@@ -26,6 +26,7 @@ if __name__ == "__main__":
     
     wget.download(args.server_address + 'file=' + result[2], args.output + "/incam.json")
     wget.download(args.server_address + 'file=' + result[3], args.output + "/global.json")
+    wget.download(args.server_address + 'file=' + result[4], args.output + "/ground.json")
     
     incam = json.load(open(args.output + "/incam.json"))
     global_ = json.load(open(args.output + "/global.json"))

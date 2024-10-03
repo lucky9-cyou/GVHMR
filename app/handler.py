@@ -78,8 +78,8 @@ def run_demo(cfg, progress):
         smpl_utils["J_regressor"] = smpl_utils["J_regressor"].cuda()
         smpl_utils["smplx2smpl"] = smpl_utils["smplx2smpl"].cuda()
         incam_out = render_incam(cfg, pred, smpl_utils)
-        global_out = render_global(cfg, pred, smpl_utils)
-        return incam_out, global_out
+        global_out, ground = render_global(cfg, pred, smpl_utils)
+        return incam_out, global_out, ground
 
     return run_GPU_task()
 
@@ -110,7 +110,7 @@ def handler(video_path, cam_status, progress=gr.Progress()):
     # 3. Run demo.
     cfg = OmegaConf.to_container(cfg, resolve=True)
     cfg = OmegaConf.create(cfg)
-    incam_out, global_out = run_demo(cfg, progress)
+    incam_out, global_out, ground = run_demo(cfg, progress)
 
     # 4. Prepare the output.
-    return cfg.paths.incam_video, cfg.paths.global_video, incam_out, global_out
+    return cfg.paths.incam_video, cfg.paths.global_video, incam_out, global_out, ground
