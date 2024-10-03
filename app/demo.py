@@ -433,9 +433,9 @@ def render_global(cfg, pred, smpl_utils):
     writer.close()
     
     ground = {
-        scale: scale,
-        cx: cx,
-        cz: cz,
+        "scale": scale * 1.5,
+        "cx": cx,
+        "cz": cz,
     }
     
     with open(cfg.paths.global_video.replace('.mp4', '.json'), "w") as f:
