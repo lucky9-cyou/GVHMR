@@ -305,7 +305,7 @@ def render_incam(cfg):
     incam_video_path = Path(cfg.paths.incam_video)
     if incam_video_path.exists():
         Log.info(f"[Render Incam] Video already exists at {incam_video_path}")
-        # return
+        return
 
     pred = torch.load(cfg.paths.hmr4d_results)
     smplx = make_smplx("supermotion").cuda()

@@ -170,7 +170,7 @@ class Renderer:
     def set_ground(self, length, center_x, center_z):
         device = self.device
         length, center_x, center_z = map(float, (length, center_x, center_z))
-        v, f, vc, fc = map(torch.from_numpy, checkerboard_geometry(length=length, c1=center_x, c2=center_z, up="y"))
+        v, f, vc, fc = map(torch.from_numpy, checkerboard_geometry(length=length, c1=center_x, c2=center_z, up="y", tile_width=0.1))
         v, f, vc = v.to(device), f.to(device), vc.to(device)
         self.ground_geometry = [v, f, vc]
 
@@ -241,7 +241,7 @@ class Renderer:
         self.reset_bbox()
         return image
 
-    def render_with_ground(self, verts, colors, cameras, lights, faces=None):
+    def render_with_ground(self, verts, colors, cameras, lights, faces=None, collision_threshold=0.1, collision_color=[1.0, 0.0, 0.0, 1.0]):
         """
         :param verts (N, V, 3), potential multiple people
         :param colors (N, 3) or (N, V, 3)
@@ -262,9 +262,17 @@ class Renderer:
 
         # (V, 3), (F, 3), (V, 3)
         gv, gf, gc = self.ground_geometry
+        
+        modified_gc = gc.clone()
+        for p in range(verts.shape[0]):
+            collision_verts = verts[p, verts[p, :, 1] < collision_threshold]
+            bbox = [collision_verts[:, 0].min(), collision_verts[:, 0].max(), collision_verts[:, 2].min(), collision_verts[:, 2].max()]
+            collision_mask = (gv[:, 0] > bbox[0]) * (gv[:, 0] < bbox[1]) * (gv[:, 2] > bbox[2]) * (gv[:, 2] < bbox[3])
+            modified_gc[collision_mask] = torch.tensor(collision_color, dtype=torch.float32, device=gc.device)
+        
         verts = list(torch.unbind(verts, dim=0)) + [gv]
         faces = list(torch.unbind(faces, dim=0)) + [gf]
-        colors = list(torch.unbind(colors, dim=0)) + [gc[..., :3]]
+        colors = list(torch.unbind(colors, dim=0)) + [modified_gc[..., :3]]
         mesh = create_meshes(verts, faces, colors)
 
         materials = Materials(device=self.device, shininess=0)
