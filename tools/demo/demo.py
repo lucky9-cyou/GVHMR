@@ -34,7 +34,7 @@ from einops import einsum, rearrange
 import numpy as np
 import smplx
 import quat
-
+from pytorch3d.io import IO as p3d_IO
 
 CRF = 23  # 17 is lossless, every +6 halves the mp4 size
 
@@ -440,6 +440,10 @@ def render_global(cfg):
         img = renderer.render_with_ground(verts_glob[[i]], color[None], cameras, global_lights)
         writer.write_frame(img)
     writer.close()
+    
+    mesh = renderer.first_mesh(verts_glob[[0]], color[None])
+    p3d_io = p3d_IO()
+    p3d_io.save_mesh(mesh, cfg.paths.global_video.replace('.mp4', '.obj'))
 
     return bvh_data
 

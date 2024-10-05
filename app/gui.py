@@ -39,4 +39,8 @@ def get_outputs_components():
             label="Ground Parameters",
             show_label=True,
         ),
+        gr.File(
+            label="First Mesh",
+            show_label=True,
+        ),
     ]

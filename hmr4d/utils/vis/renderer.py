@@ -281,6 +281,32 @@ class Renderer:
         image = (results[0, ..., :3].cpu().numpy() * 255).astype(np.uint8)
 
         return image
+    
+    def first_mesh(self, verts, colors, faces=None):
+        """
+        :param verts (N, V, 3), potential multiple people
+        :param colors (N, 3) or (N, V, 3)
+        :param faces (N, F, 3), optional, otherwise self.faces is used will be used
+        """
+        # Sanity check of input verts, colors and faces: (B, V, 3), (B, F, 3), (B, V, 3)
+        N, V, _ = verts.shape
+        if faces is None:
+            faces = self.faces.clone().expand(N, -1, -1)
+        else:
+            assert len(faces.shape) == 3, "faces should have shape of (N, F, 3)"
+
+        assert len(colors.shape) in [2, 3]
+        if len(colors.shape) == 2:
+            assert len(colors) == N, "colors of shape 2 should be (N, 3)"
+            colors = colors[:, None]
+        colors = colors.expand(N, V, -1)[..., :3]
+        
+        verts = list(torch.unbind(verts, dim=0))
+        faces = list(torch.unbind(faces, dim=0))
+        colors = list(torch.unbind(colors, dim=0))
+        mesh = create_meshes(verts, faces, colors)
+
+        return mesh
 
 
 def create_meshes(verts, faces, colors):
