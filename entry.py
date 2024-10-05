@@ -6,6 +6,10 @@ from app.handler import handler
 
 
 def entry():
+    REPO_ROOT = str(os.path.join(os.path.dirname(__file__)))
+    os.system(f'touch {REPO_ROOT}/server_up')
+    os.system('lsof -i :7860 | grep LISTEN | awk \'{print $2}\' | xargs kill')
+    
     try:
         demo = gr.Interface(
             fn=handler,
