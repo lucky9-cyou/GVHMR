@@ -28,6 +28,14 @@ def get_outputs_components():
             show_label=True,
         ),
         gr.File(
+            label="BVH INCAM JSON RESULT",
+            show_label=True,
+        ),
+        gr.File(
+            label="BVH GLOBAL JSON RESULT",
+            show_label=True,
+        ),
+        gr.File(
             label="BVH INCAM RESULT",
             show_label=True,
         ),

@@ -36,6 +36,7 @@ from app import quat
 import smplx
 import json
 from pytorch3d.io import IO as p3d_IO
+from app import bvh
 
 CRF = 23  # 17 is lossless, every +6 halves the mp4 size
 
@@ -356,8 +357,10 @@ def render_incam(cfg, pred, smpl_utils):
     
     with open(cfg.paths.incam_video.replace('.mp4', '.json'), "w") as f:
         json.dump(bvh_data, f)
+    
+    bvh.save(cfg.paths.incam_video.replace('.mp4', '.bvh'), bvh_data)
 
-    return cfg.paths.incam_video.replace('.mp4', '.json')
+    return cfg.paths.incam_video.replace('.mp4', '.json'), cfg.paths.incam_video.replace('.mp4', '.bvh')
 
 
 def render_global(cfg, pred, smpl_utils):
@@ -448,8 +451,10 @@ def render_global(cfg, pred, smpl_utils):
     
     with open(cfg.paths.global_video.replace('.mp4', '_ground.json'), "w") as f:
         json.dump(ground, f)
+        
+    bvh.save(cfg.paths.global_video.replace('.mp4', '.bvh'), bvh_data)
 
-    return cfg.paths.global_video.replace('.mp4', '.json'), cfg.paths.global_video.replace('.mp4', '_ground.json'), cfg.paths.global_video.replace('.mp4', '.obj')
+    return cfg.paths.global_video.replace('.mp4', '.json'), cfg.paths.global_video.replace('.mp4', '.bvh'), cfg.paths.global_video.replace('.mp4', '_ground.json'), cfg.paths.global_video.replace('.mp4', '.obj')
 
 
 if __name__ == "__main__":
