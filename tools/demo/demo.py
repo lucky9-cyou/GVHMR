@@ -35,6 +35,8 @@ import numpy as np
 import smplx
 import quat
 from pytorch3d.io import IO as p3d_IO
+import os
+import bvh
 
 CRF = 23  # 17 is lossless, every +6 halves the mp4 size
 
@@ -200,7 +202,7 @@ def mirror_rot_trans(lrot, trans, names, parents):
     return quat.ik_rot(grot_mirror, parents), trans_mirror
 
 
-def smpl2bvh(model_path, rots, mirror, model_type="smpl", gender="NEUTRAL", num_betas=10, fps=60) -> None:
+def smpl2bvh(model_path, rots, trans, mirror, model_type="smpl", gender="NEUTRAL", num_betas=10, fps=60) -> None:
     """Save bvh file created by smpl parameters.
 
     Args:
@@ -215,67 +217,65 @@ def smpl2bvh(model_path, rots, mirror, model_type="smpl", gender="NEUTRAL", num_
     """
 
     names = [
-        "Pelvis",
-        "Left_hip",
-        "Right_hip",
-        "Spine1",
-        "Left_knee",
-        "Right_knee",
-        "Spine2",
-        "Left_ankle",
-        "Right_ankle",
-        "Spine3",
-        "Left_foot",
-        "Right_foot",
-        "Neck",
-        "Left_collar",
-        "Right_collar",
-        "Head",
-        "Left_shoulder",
-        "Right_shoulder",
-        "Left_elbow",
-        "Right_elbow",
-        "Left_wrist",
-        "Right_wrist",
-        "Left_palm",
-        "Right_palm",
+        "pelvis",
+        "left_hip",
+        "right_hip",
+        "spine1",
+        "left_knee",
+        "right_knee",
+        "spine2",
+        "left_ankle",
+        "right_ankle",
+        "spine3",
+        "left_foot",
+        "right_foot",
+        "neck",
+        "left_collar",
+        "right_collar",
+        "head",
+        "left_shoulder",
+        "right_shoulder",
+        "left_elbow",
+        "right_elbow",
+        "left_wrist",
+        "right_wrist",
     ]
 
     # I prepared smpl models only,
     # but I will release for smplx models recently.
     model = smplx.create(model_path=model_path, model_type=model_type, gender=gender, batch_size=1)
 
-    parents = model.parents.detach().cpu().numpy()
+    parents = model.parents.detach().cpu().numpy()[:22]
 
     # You can define betas like this.(default betas are 0 at all.)
     rest = model(
         # betas = torch.randn([1, num_betas], dtype=torch.float32)
     )
-    rest_pose = rest.joints.detach().cpu().numpy().squeeze()[:24, :]
-
+    rest_pose = rest.joints.detach().cpu().numpy().squeeze()[:22, :]
+    rest_pose = rest_pose - rest_pose[0]
+    
     root_offset = rest_pose[0]
     offsets = rest_pose - rest_pose[parents]
     offsets[0] = root_offset
-    offsets *= 100
 
     scaling = None
 
-    rots = rots  # (N, 24, 3)
-    trans = np.zeros((rots.shape[0], 3))
+    rots = rots  # (N, 22, 3)
+    trans = trans - trans[:1]  # (N, 3)
     # trans = np.squeeze(poses["trans"], axis=0)  # (N, 3)
 
     if scaling is not None:
         trans /= scaling
 
     # to quaternion
-    rots = quat.from_axis_angle(rots)
+    rots = quat.from_axis_angle(rots) 
     # nan to zero
     # rots[np.isnan(rots)] = 0
 
     order = "zyx"
     pos = offsets[None].repeat(len(rots), axis=0)
     positions = pos.copy()
-    positions[:, 0] += trans * 100
+    positions[:, 0] += trans
     rotations = np.degrees(quat.to_euler(rots, order=order))
 
     bvh_data = {
@@ -291,14 +291,12 @@ def smpl2bvh(model_path, rots, mirror, model_type="smpl", gender="NEUTRAL", num_
     return bvh_data
 
 
-def _smplx2smpl(global_orient, body_pose, left_hand_pose, right_hand_pose):
+def _smplx2smpl(global_orient, body_pose):
 
     global_joints = global_orient.numpy()
     body_joints = body_pose.numpy()
-    left_joints = left_hand_pose[:3].numpy()
-    right_joints = right_hand_pose[:3].numpy()
 
-    return np.concatenate((global_joints, body_joints, left_joints, right_joints), axis=0).reshape(-1, 3)
+    return np.concatenate((global_joints, body_joints), axis=0).reshape(-1, 3)
 
 
 def render_incam(cfg):
@@ -330,12 +328,10 @@ def render_incam(cfg):
         frame_data = _smplx2smpl(
             smplx_out["global_orient"][t].cpu(),
             smplx_out["body_pose"][t].cpu(),
-            smplx_out["left_hand_pose"][t].cpu(),
-            smplx_out["right_hand_pose"][t].cpu(),
         )
         smpl_frames.append(frame_data)
     smpl_frames = np.stack(smpl_frames, axis=0)
-    bvh_data = smpl2bvh("inputs/checkpoints/body_models/smpl/SMPL_NEUTRAL.pkl", smpl_frames, True)
+    bvh_data = smpl2bvh("inputs/checkpoints/body_models/smplx/SMPLX_NEUTRAL.npz", smpl_frames, pred["smpl_params_incam"]['transl'].cpu().numpy(), True)
 
     pred_c_verts = torch.stack([torch.matmul(smplx2smpl, v_) for v_ in smplx_out.vertices])
 
@@ -391,12 +387,10 @@ def render_global(cfg):
         frame_data = _smplx2smpl(
             smplx_out["global_orient"][t].cpu(),
             smplx_out["body_pose"][t].cpu(),
-            smplx_out["left_hand_pose"][t].cpu(),
-            smplx_out["right_hand_pose"][t].cpu(),
         )
         smpl_frames.append(frame_data)
     smpl_frames = np.stack(smpl_frames, axis=0)
-    bvh_data = smpl2bvh("inputs/checkpoints/body_models/smpl/SMPL_NEUTRAL.pkl", smpl_frames, True)
+    bvh_data = smpl2bvh("inputs/checkpoints/body_models/smplx/SMPLX_NEUTRAL.npz", smpl_frames, pred["smpl_params_global"]['transl'].cpu().numpy(), True)
 
     def move_to_start_point_face_z(verts):
         "XZ to origin, Start from the ground, Face-Z"
@@ -439,11 +433,14 @@ def render_global(cfg):
         cameras = renderer.create_camera(global_R[i], global_T[i])
         img = renderer.render_with_ground(verts_glob[[i]], color[None], cameras, global_lights)
         writer.write_frame(img)
+                
     writer.close()
     
     mesh = renderer.first_mesh(verts_glob[[0]], color[None])
     p3d_io = p3d_IO()
     p3d_io.save_mesh(mesh, cfg.paths.global_video.replace('.mp4', '.obj'))
+    
+    bvh.save(cfg.paths.global_video.replace('.mp4', '.bvh'), bvh_data)
 
     return bvh_data
 

@@ -52,7 +52,6 @@ class BodyModelSMPLX(nn.Module):
     ):
 
         device, dtype = self.bm.shapedirs.device, self.bm.shapedirs.dtype
-
         model_vars = [
             betas,
             global_orient,
