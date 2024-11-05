@@ -264,16 +264,16 @@ class Renderer:
         # (V, 3), (F, 3), (V, 3)
         gv, gf, gc = self.ground_geometry
         
-        modified_gc = gc.clone()
-        for p in range(verts.shape[0]):
-            collision_verts = verts[p, verts[p, :, 1] < collision_threshold]
-            bbox = [collision_verts[:, 0].min(), collision_verts[:, 0].max(), collision_verts[:, 2].min(), collision_verts[:, 2].max()]
-            collision_mask = (gv[:, 0] > bbox[0]) * (gv[:, 0] < bbox[1]) * (gv[:, 2] > bbox[2]) * (gv[:, 2] < bbox[3])
-            modified_gc[collision_mask] = torch.tensor(collision_color, dtype=torch.float32, device=gc.device)
+        # modified_gc = gc.clone()
+        # for p in range(verts.shape[0]):
+        #     collision_verts = verts[p, verts[p, :, 1] < collision_threshold]
+        #     bbox = [collision_verts[:, 0].min(), collision_verts[:, 0].max(), collision_verts[:, 2].min(), collision_verts[:, 2].max()]
+        #     collision_mask = (gv[:, 0] > bbox[0]) * (gv[:, 0] < bbox[1]) * (gv[:, 2] > bbox[2]) * (gv[:, 2] < bbox[3])
+        #     modified_gc[collision_mask] = torch.tensor(collision_color, dtype=torch.float32, device=gc.device)
         
         verts = list(torch.unbind(verts, dim=0)) + [gv]
         faces = list(torch.unbind(faces, dim=0)) + [gf]
-        colors = list(torch.unbind(colors, dim=0)) + [modified_gc[..., :3]]
+        colors = list(torch.unbind(colors, dim=0)) + [gc[..., :3]]
         mesh = create_meshes(verts, faces, colors)
 
         materials = Materials(device=self.device, shininess=0)
