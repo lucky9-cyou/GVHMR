@@ -3,6 +3,7 @@ import gradio as gr
 from omegaconf import OmegaConf
 
 from app.demo import *
+from pathlib import Path
 
 
 def prepare_cfg(is_static: bool, video_path: str, demo_id: str):
@@ -82,6 +83,134 @@ def run_demo(cfg, progress):
         return incam_out, global_out, incam_bvh, ground_bvh, ground, mesh
 
     return run_GPU_task()
+
+
+def track_handler(video_path, cam_status, progress=gr.Progress()):
+    # 0. Check validity of inputs.
+    if cam_status not in ["Static Camera", "Dynamic Camera"]:
+        raise gr.Error("Please define the camera status!", duration=5)
+    if video_path is None or not Path(video_path).exists():
+        raise gr.Error("Can not find the video!", duration=5)
+
+    # 1. Deal with APP inputs.
+    is_static = cam_status == "Static Camera"
+    Log.info(f"[Input Args] is_static: {is_static}")
+    Log.info(f"[Input Args] video_path: {video_path}")
+
+    if not is_static:
+        Log.info("[Warning] Dynamic Camera is not supported yet.")
+        raise gr.Error(
+            "DPVO is not supported in spaces yet. Try to run videos with static camera instead!", duration=20
+        )
+
+    # 2. Prepare cfg.
+    Log.info(f"[Video]: {video_path}")
+    demo_id = f"{Path(video_path).stem}_{np.random.randint(0, 1024):04d}"
+    cfg = prepare_cfg(is_static, video_path, demo_id)
+
+    # 3. Run demo.
+    cfg = OmegaConf.to_container(cfg, resolve=True)
+    cfg = OmegaConf.create(cfg)
+    
+    Log.info(f"[GPU]: {torch.cuda.get_device_name()}")
+    Log.info(f'[GPU]: {torch.cuda.get_device_properties("cuda")}')
+    Log.info(f"[Preprocess] Start!")
+    
+    paths = cfg.paths
+    
+    progress(0, "[Preprocess] YoloV8 Tracking")
+    tracker = Tracker()
+    bbx_xyxys = tracker.get_all_track(video_path)
+    
+    video = read_video_np(video_path)
+    for i, bbx_xyxy in enumerate(bbx_xyxys):
+        video = draw_bbx_xyxy_on_image_batch(bbx_xyxy, video, bbox_id=i)
+    save_video(video, cfg.paths.bbx_xyxy_video_overlay)
+    
+    track_state = {
+        "cfg": cfg,
+        "progress": progress,
+        "bbx_xyxys": bbx_xyxys,
+    }
+    
+    return track_state, cfg.paths.bbx_xyxy_video_overlay
+    
+
+def pose_handler(video_path, track_state, track_id, progress=gr.Progress()):
+    cfg = track_state["cfg"]
+    video_path = cfg.video_path
+    paths = cfg.paths
+    static_cam = cfg.static_cam
+    
+    bbx_xyxy = track_state["bbx_xyxys"][track_id]
+    bbx_xys = get_bbx_xys_from_xyxy(bbx_xyxy, base_enlarge=1.2).float()
+    torch.save({"bbx_xyxy": bbx_xyxy, "bbx_xys": bbx_xys}, paths.bbx)
+    tic = Log.time()
+    
+    smpl_utils = {
+        "smplx": make_smplx("supermotion"),
+        "J_regressor": torch.load("hmr4d/utils/body_model/smpl_neutral_J_regressor.pt"),
+        "smplx2smpl": torch.load("hmr4d/utils/body_model/smplx2smpl_sparse.pt"),
+        "faces_smpl": make_smplx("smpl").faces,
+    }
+    
+    # Get VitPose
+    progress(1 / 4, "[Preprocess] ViTPose")
+    vitpose_extractor = VitPoseExtractor()
+    vitpose = vitpose_extractor.extract(video_path, bbx_xys)
+    torch.save(vitpose, paths.vitpose)
+
+    # Get vit features
+    progress(2 / 4, "[Preprocess] HMR2 Feature")
+    extractor = Extractor()
+    vit_features = extractor.extract_video_features(video_path, bbx_xys)
+    torch.save(vit_features, paths.vit_features)
+
+    # Get DPVO results
+    progress(3 / 4, "[Preprocess] DPVO")
+    if not static_cam:  # use slam to get cam rotation
+        length, width, height = get_video_lwh(cfg.video_path)
+        K_fullimg = estimate_K(width, height)
+        intrinsics = convert_K_to_K4(K_fullimg)
+        slam = SLAMModel(video_path, width, height, intrinsics, buffer=4000, resize=0.5)
+        bar = tqdm(total=length, desc="DPVO")
+        while True:
+            ret = slam.track()
+            if ret:
+                bar.update()
+            else:
+                break
+        slam_results = slam.process()  # (L, 7), numpy
+        torch.save(slam_results, paths.slam)
+
+    Log.info(f"[Preprocess] End. Time elapsed: {Log.time()-tic:.2f}s")
+    
+    
+    data = load_data_dict(cfg)
+
+    # ===== HMR4D ===== #
+    Log.info("[HMR4D] Predicting")
+    progress(0, "[GVHMR] Initializing pipeline...")
+    model: DemoPL = hydra.utils.instantiate(cfg.model, _recursive_=False)
+    model.load_pretrained_model(cfg.ckpt_path)
+    model = model.eval().cuda()
+    tic = Log.sync_time()
+    progress(1 / 3, "[GVHMR] Predicting...")
+    pred = model.predict(data, static_cam=cfg.static_cam)
+    pred = detach_to_cpu(pred)
+    data_time = data["length"] / 30
+    Log.info(f"[HMR4D] Elapsed: {Log.sync_time() - tic:.2f}s for data-length={data_time:.1f}s")
+
+    progress(2 / 3, "[GVHMR] Rendering...")
+
+    # ===== Render ===== #
+    smpl_utils["smplx"] = smpl_utils["smplx"].cuda()
+    smpl_utils["J_regressor"] = smpl_utils["J_regressor"].cuda()
+    smpl_utils["smplx2smpl"] = smpl_utils["smplx2smpl"].cuda()
+    incam_out, incam_bvh = render_incam(cfg, pred, smpl_utils)
+    global_out, ground_bvh, ground, mesh = render_global(cfg, pred, smpl_utils)
+        
+    return cfg.paths.incam_video, cfg.paths.global_video, incam_out, global_out, incam_bvh, ground_bvh, ground, mesh
 
 
 def handler(video_path, cam_status, progress=gr.Progress()):

@@ -93,3 +93,28 @@ class Tracker:
         bbx_xyxy_one_track = moving_average_smooth(bbx_xyxy_one_track, window_size=5, dim=0)
 
         return bbx_xyxy_one_track
+    
+    def get_all_track(self, video_path):
+        # track
+        track_history = self.track(video_path)
+
+        # parse track_history & use top1 track
+        id_to_frame_ids, id_to_bbx_xyxys, id_sorted = self.sort_track_length(track_history, video_path)
+        all_tracks = []
+        for track_id in id_sorted:
+            frame_ids = torch.tensor(id_to_frame_ids[track_id])
+            bbx_xyxys = torch.tensor(id_to_bbx_xyxys[track_id])
+            
+            # interpolate missing frames
+            mask = frame_id_to_mask(frame_ids, get_video_lwh(video_path)[0])
+            bbx_xyxy_one_track = rearrange_by_mask(bbx_xyxys, mask)
+            missing_frame_id_list = get_frame_id_list_from_mask(~mask)
+            bbx_xyxy_one_track = linear_interpolate_frame_ids(bbx_xyxy_one_track, missing_frame_id_list)
+            assert (bbx_xyxy_one_track.sum(1) != 0).all()
+            
+            bbx_xyxy_one_track = moving_average_smooth(bbx_xyxy_one_track, window_size=5, dim=0)
+            bbx_xyxy_one_track = moving_average_smooth(bbx_xyxy_one_track, window_size=5, dim=0)
+            bbx_xyxy_one_track = bbx_xyxy_one_track.float()
+            all_tracks.append(bbx_xyxy_one_track)
+        
+        return all_tracks

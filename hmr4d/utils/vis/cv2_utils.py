@@ -37,15 +37,17 @@ def draw_bbx_xys_on_image_batch(bbx_xys_batch, image_batch, conf=None):
     return image_batch_out
 
 
-def draw_bbx_xyxy_on_image(bbx_xys, image, conf=True):
+def draw_bbx_xyxy_on_image(bbx_xys, image, conf=True, bbox_id=None):
     bbx_xys = to_numpy(bbx_xys)
     image = to_numpy(image)
     color = (255, 178, 102) if conf == True else (128, 128, 128)  # orange or gray
     image = cv2.rectangle(image, (int(bbx_xys[0]), int(bbx_xys[1])), (int(bbx_xys[2]), int(bbx_xys[3])), color, 2)
+    if bbox_id is not None:
+        image = cv2.putText(image, str(bbox_id), (int(bbx_xys[0]), int(bbx_xys[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
     return image
 
 
-def draw_bbx_xyxy_on_image_batch(bbx_xyxy_batch, image_batch, mask=None, conf=None):
+def draw_bbx_xyxy_on_image_batch(bbx_xyxy_batch, image_batch, mask=None, conf=None, bbox_id=None):
     """
     Args:
         conf: if provided, list of bool, mutually exclusive with mask
@@ -62,10 +64,10 @@ def draw_bbx_xyxy_on_image_batch(bbx_xyxy_batch, image_batch, mask=None, conf=No
     image_batch_out = []
     for i in range(len(bbx_xyxy_batch)):
         if use_conf:
-            image_batch_out.append(draw_bbx_xyxy_on_image(bbx_xyxy_batch[i], image_batch[i], conf[i]))
+            image_batch_out.append(draw_bbx_xyxy_on_image(bbx_xyxy_batch[i], image_batch[i], conf[i], bbox_id=bbox_id))
         else:
             if mask is None or mask[i]:
-                image_batch_out.append(draw_bbx_xyxy_on_image(bbx_xyxy_batch[i], image_batch[i]))
+                image_batch_out.append(draw_bbx_xyxy_on_image(bbx_xyxy_batch[i], image_batch[i], bbox_id=bbox_id))
             else:
                 image_batch_out.append(image_batch[i])
     return image_batch_out

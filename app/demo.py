@@ -305,9 +305,6 @@ def _smplx2smpl(global_orient, body_pose):
 
 def render_incam(cfg, pred, smpl_utils):
     incam_video_path = Path(cfg.paths.incam_video)
-    if incam_video_path.exists():
-        Log.info(f"[Render Incam] Video already exists at {incam_video_path}")
-        return
 
     # pred = torch.load(cfg.paths.hmr4d_results)
     smplx = smpl_utils["smplx"]
@@ -359,9 +356,6 @@ def render_incam(cfg, pred, smpl_utils):
 
 def render_global(cfg, pred, smpl_utils):
     global_video_path = Path(cfg.paths.global_video)
-    if global_video_path.exists():
-        Log.info(f"[Render Global] Video already exists at {global_video_path}")
-        return
 
     debug_cam = False
     # pred = torch.load(cfg.paths.hmr4d_results)
